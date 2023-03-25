@@ -49,6 +49,8 @@ app.post("/dialogflow", async (req, res) => {
   let action = req.body.queryResult.action;
   let queryText = req.body.queryResult.queryText;
 
+  console.log({ action, queryText });
+
   if (action === "input.unknown") {
     let result = await textGeneration(queryText);
     if (result.status == 1) {
