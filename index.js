@@ -1,76 +1,34 @@
 const express = require("express");
-const { Configuration, OpenAIApi } = require("openai");
-require("dotenv").config();
+const bodyParser = require("body-parser");
+const { dialogflow } = require("actions-on-google");
 
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-const openai = new OpenAIApi(configuration);
-
-const textGeneration = async (prompt) => {
-  try {
-    const response = await openai.createCompletion({
-      model: "text-davinci-003",
-      prompt: `Human: ${prompt}\nAI: `,
-      temperature: 0.9,
-      max_tokens: 500,
-      top_p: 1,
-      frequency_penalty: 0,
-      presence_penalty: 0.6,
-      stop: ["Human:", "AI:"],
-    });
-
-    return {
-      status: 1,
-      response: `${response.data.choices[0].text}`,
-    };
-  } catch (error) {
-    return {
-      status: 0,
-      response: "",
-    };
-  }
-};
+const textGeneration = require("./openai");
 
 const app = express();
+app.use(bodyParser.json());
 
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
-app.use((req, res, next) => {
-  console.log(`Path ${req.path} with Method ${req.method}`);
-  next();
+const dialogflowApp = dialogflow({
+  debug: true,
 });
 
-app.get("/", (req, res) => {
-  return res.send("Welcome to saiyan chat!");
+dialogflowApp.intent("Default Welcome Intent", (conv) => {
+  conv.ask("Hello! What can I help you with today?");
 });
 
-app.post("/dialogflow", async (req, res) => {
-  let action = req.body.queryResult.action;
-  let queryText = req.body.queryResult.queryText;
-
-  console.log({ action, queryText });
-
-  if (action === "input.unknown") {
-    let result = await textGeneration(queryText);
-    if (result.status == 1) {
-      res.send({
-        fulfillmentText: result.response,
-      });
-    } else {
-      res.send({
-        fulfillmentText: `Sorry, I'm not able to help with that.`,
-      });
-    }
+dialogflowApp.intent("Question Intent", async (conv, { question }) => {
+  // Here, you can perform some logic to answer the question
+  let result = await textGeneration(question);
+  let answer = "This is the answer to your question";
+  if (result.status == 1) {
+    answer = result.response;
   } else {
-    res.send({
-      fulfillmentText: `No handler for the action ${action}.`,
-    });
+    answer = `Sorry, I'm not able to help with that.`;
   }
+  conv.ask(answer);
 });
 
-const port = process.env.PORT || 9001;
+app.post("/webhook", dialogflowApp);
 
-app.listen(port, () => {
-  console.log(`Server is up and running at ${port}`);
+app.listen(process.env.PORT || 3000, () => {
+  console.log("Webhook is listening");
 });
